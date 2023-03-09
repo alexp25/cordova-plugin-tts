@@ -67,6 +67,7 @@
     NSString* locale = [options objectForKey:@"locale"];
     double rate = [[options objectForKey:@"rate"] doubleValue];
     double pitch = [[options objectForKey:@"pitch"] doubleValue];
+    double volume = [[options objectForKey:@"volume"] doubleValue];
     
     if (!locale || (id)locale == [NSNull null]) {
         locale = @"en-US";
@@ -80,8 +81,14 @@
         pitch = 1.2;
     }
     
+    if (!volume) {
+        volume = 1.0;
+    }
+
     AVSpeechUtterance* utterance = [[AVSpeechUtterance new] initWithString:text];
     utterance.voice = [AVSpeechSynthesisVoice voiceWithLanguage:locale];
+    // Range: 0.0 - 1.0 ; A relative volume to the device volume
+    utterance.volume = volume;
     // Rate expression adjusted manually for a closer match to other platform.
     utterance.rate = (AVSpeechUtteranceMinimumSpeechRate * 1.5 + AVSpeechUtteranceDefaultSpeechRate) / 2.25 * rate * rate;
     // workaround for https://github.com/vilic/cordova-plugin-tts/issues/21
