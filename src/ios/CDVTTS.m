@@ -39,11 +39,13 @@
     
     NSDictionary* options = [command.arguments objectAtIndex:0];
     
+    NSString* category = [options objectForKey:@"category"];
     NSString* text = [options objectForKey:@"text"];
     NSString* locale = [options objectForKey:@"locale"];
     double rate = [[options objectForKey:@"rate"] doubleValue];
-    NSString* category = [options objectForKey:@"category"];
-    
+    double pitch = [[options objectForKey:@"pitch"] doubleValue];
+    double volume = [[options objectForKey:@"volume"] doubleValue];
+
     [[AVAudioSession sharedInstance] setActive:NO withOptions:0 error:nil];
     if ([category isEqualToString:@"ambient"]) {
         [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryAmbient
@@ -60,15 +62,7 @@
     callbackId = command.callbackId;
     
     [synthesizer stopSpeakingAtBoundary:AVSpeechBoundaryImmediate];
-    
-    NSDictionary* options = [command.arguments objectAtIndex:0];
-    
-    NSString* text = [options objectForKey:@"text"];
-    NSString* locale = [options objectForKey:@"locale"];
-    double rate = [[options objectForKey:@"rate"] doubleValue];
-    double pitch = [[options objectForKey:@"pitch"] doubleValue];
-    double volume = [[options objectForKey:@"volume"] doubleValue];
-    
+      
     if (!locale || (id)locale == [NSNull null]) {
         locale = @"en-US";
     }
