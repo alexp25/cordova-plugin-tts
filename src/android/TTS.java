@@ -17,6 +17,8 @@ import android.speech.tts.UtteranceProgressListener;
 
 import java.util.HashMap;
 import java.util.Locale;
+import android.os.Bundle; // Import for using Bundle
+
 
 /*
     Cordova Text-to-Speech Plugin
@@ -37,122 +39,123 @@ public class TTS extends CordovaPlugin implements OnInitListener {
 
     boolean ttsInitialized = false;
     TextToSpeech tts = null;
+    private CallbackContext storedCallbackContext; // Store callback context for use in listeners
 
     @Override
     public void initialize(CordovaInterface cordova, final CordovaWebView webView) {
-        tts = new TextToSpeech(cordova.getActivity().getApplicationContext(), this);
-        tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
-            @Override
-            public void onStart(String s) {
-                // do nothing
-            }
-
-            @Override
-            public void onDone(String callbackId) {
-                if (!callbackId.equals("")) {
-                    CallbackContext context = new CallbackContext(callbackId, webView);
-                    context.success();
-                }
-            }
-
-            @Override
-            public void onError(String callbackId) {
-                if (!callbackId.equals("")) {
-                    CallbackContext context = new CallbackContext(callbackId, webView);
-                    context.error(ERR_UNKNOWN);
-                }
-            }
-        });
+        tts = new TextToSpeech(cordova.getActivity().getApplicationContext(), this);       
     }
 
     @Override
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext)
             throws JSONException {
-        if (action.equals("speak")) {
-            speak(args, callbackContext);
-        } else {
-            return false;
+
+        switch (action) {
+            case "speak":
+                storedCallbackContext = callbackContext; // Store the current callback context
+                try {
+                    speak(args, callbackContext);
+                } catch (JSONException e) {
+                    callbackContext.error("JSON error: " + e.getMessage());
+                }
+                return true;
+            case "stop":
+                stop(callbackContext);
+                return true;
+            default:
+                callbackContext.error("Invalid action");
+                return false; // Returning false indicates an unrecognized action
         }
-        return true;
     }
 
-    @Override
+   @Override
     public void onInit(int status) {
         if (status != TextToSpeech.SUCCESS) {
             tts = null;
         } else {
-            // warm up the tts engine with an empty string
-            HashMap<String, String> ttsParams = new HashMap<String, String>();
-            ttsParams.put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "");
-            tts.setLanguage(new Locale("en", "US"));
-            tts.speak("", TextToSpeech.QUEUE_FLUSH, ttsParams);
+            tts.setLanguage(Locale.US); // Example, adjust based on your needs
+            tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+                @Override
+                public void onStart(String s) {
+                    // do nothing
+                }
 
+                @Override
+                public void onStop(String utteranceId, boolean interrupted) {
+                    // Called when an utterance has been stopped while in progress or flushed from the synthesis queue.                    
+                     if (storedCallbackContext != null) {
+                        storedCallbackContext.success(); // Notify success on the callback stored during 'speak'
+                    }
+                }
+
+                @Override
+                public void onDone(String utteranceId) {
+                    if (storedCallbackContext != null) {
+                        storedCallbackContext.success(); // Notify success on the callback stored during 'speak'
+                        storedCallbackContext = null; // Clear the stored callback context
+                    }
+                }
+
+                @Override
+                public void onError(String utteranceId) {
+                    if (storedCallbackContext != null) {
+                        storedCallbackContext.error(ERR_UNKNOWN); // Notify error
+                        storedCallbackContext = null; // Clear the stored callback context
+                    }
+                }
+            });
             ttsInitialized = true;
         }
     }
 
-    private void speak(JSONArray args, CallbackContext callbackContext)
-            throws JSONException, NullPointerException {
-        JSONObject params = args.getJSONObject(0);
+    private void speak(JSONArray args, CallbackContext callbackContext) throws JSONException {
 
-        if (params == null) {
-            callbackContext.error(ERR_INVALID_OPTIONS);
-            return;
-        }
-
-        String text;
-        String locale;
-        double rate;
-        double volume;
-
-        if (params.isNull("text")) {
-            callbackContext.error(ERR_INVALID_OPTIONS);
-            return;
-        } else {
-            text = params.getString("text");
-        }
-
-        if (params.isNull("locale")) {
-            locale = "en-US";
-        } else {
-            locale = params.getString("locale");
-        }
-
-        if (params.isNull("rate")) {
-            rate = 1.0;
-        } else {
-            rate = params.getDouble("rate");
-        }
-
-        if (params.isNull("volume")) {
-            volume = 1.0;
-        } else {
-            volume = params.getDouble("volume");
-        }
-
-        if (tts == null) {
-            callbackContext.error(ERR_ERROR_INITIALIZING);
-            return;
-        }
-
+        // storedCallbackContext.error(STATUS_FINISHED); // for some reason .success never reaches the Ionic app
         if (!ttsInitialized) {
-            callbackContext.error(ERR_NOT_INITIALIZED);
+            storedCallbackContext.error(ERR_NOT_INITIALIZED);
+            return;
+        }   
+
+        JSONObject params = args.optJSONObject(0);
+        if (params == null) {
+            storedCallbackContext.error(ERR_INVALID_OPTIONS);
             return;
         }
 
-        HashMap<String, String> ttsParams = new HashMap<String, String>();
-        ttsParams.put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, callbackContext.getCallbackId());
+        String text = params.optString("text", "");
+        String localeStr = params.optString("locale", "en-US");
+        double rate = params.optDouble("rate", 1.0);
+        double volume = params.optDouble("volume", 1.0);
 
-        String[] localeArgs = locale.split("-");
-        tts.setLanguage(new Locale(localeArgs[0], localeArgs[1]));
-
-        if (Build.VERSION.SDK_INT >= 27) {
-            ttsParams.put(TextToSpeech.Engine.KEY_PARAM_VOLUME, "" + volume);
-            tts.setSpeechRate((float) rate * 0.7f);
-        } else {
-            tts.setSpeechRate((float) rate);
+        if (text.isEmpty()) {
+            storedCallbackContext.error(ERR_INVALID_OPTIONS);
+            return;
         }
 
-        tts.speak(text, TextToSpeech.QUEUE_FLUSH, ttsParams);
+        Locale locale = new Locale(localeStr.split("-")[0], localeStr.split("-")[1]);
+        tts.setLanguage(locale);
+        tts.setPitch((float) 1.0); // Example, adjust as needed
+        tts.setSpeechRate((float) rate);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            Bundle paramsBundle = new Bundle();
+            paramsBundle.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, (float) volume);
+            tts.speak(text, TextToSpeech.QUEUE_FLUSH, paramsBundle, storedCallbackContext.getCallbackId());
+        } else {
+            // Fallback for older versions, deprecated after API 21
+            HashMap<String, String> ttsParams = new HashMap<>();
+            ttsParams.put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, storedCallbackContext.getCallbackId());
+            tts.speak(text, TextToSpeech.QUEUE_FLUSH, ttsParams);
+        }
+       
+    }
+
+    private void stop(CallbackContext callbackContext) {
+        if (tts != null) {
+            tts.stop();
+            callbackContext.success(); // Signal that the stop action was successful
+        } else {
+            callbackContext.error("TTS not initialized"); // Error if TTS wasn't initialized properly
+        }
     }
 }

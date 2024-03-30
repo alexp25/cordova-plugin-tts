@@ -34,6 +34,14 @@
     [[AVAudioSession sharedInstance] setActive:YES withOptions: 0 error:nil];
 }
 
+- (void)stop:(CDVInvokedUrlCommand*)command {
+    if ([synthesizer isSpeaking]) {
+        [synthesizer stopSpeakingAtBoundary:AVSpeechBoundaryImmediate];
+        CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:@"Speech stopped"];
+        [self.commandDelegate sendPluginResult:result callbackId:command.callbackId];
+    }
+}
+
 - (void)speak:(CDVInvokedUrlCommand*)command {
     [[AVAudioSession sharedInstance] setActive:NO withOptions:0 error:nil];
     [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback
